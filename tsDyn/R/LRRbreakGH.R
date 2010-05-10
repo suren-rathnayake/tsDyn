@@ -1,25 +1,25 @@
-
-
 ##################
 ## Function
 ##################
 
 
-LRRbreak.test<-function(y,x,model=c("C","CT","CS"), AdfLagChoice=c("User", "AIC", "BIC", "P-Val"),ADFlagmax=6, trim=0.15){ 
+LRRbreak.test<-function(y,x,model=c("C","CT","CS"), AdfLagChoice=c("User", "AIC", "BIC", "P-Val"),ADFlagmax=6, trim=0.15, hpc=c("none", "foreach")){ 
   #check args
   modelName<-match.arg(model)
   model<-switch(modelName, "C"=2, "CT"=3,"CS"=4)
-  choice<-match.arg(AdfLagChoice)
+  choice<-match.arg(AdfLagChoice)  
+  
   if(length(y)!=nrow(as.matrix(x)))    stop("X and y are not of the same size")
   
-#set-up temporary variables
+  hpc<-match.arg(hpc)
+  require(foreach)
+  if(hpc=="none") registerDoSEQ()
+  
+
+#set-up useful internal variables
   n<-length(y)
   begin<-round(trim*n)
   final<-round((1-trim)*n)
-  temp1<-c(rep(0,final-begin+1))
-  temp4<-temp3<-temp2<-temp1
-
-  t<-begin
   k<-ADFlagmax
 ##############
 #ADF internal function
@@ -72,36 +72,16 @@ LRRbreak.test<-function(y,x,model=c("C","CT","CS"), AdfLagChoice=c("User", "AIC"
 ##############
 ##Compute ADF, Zt and Za for each t
 ##############
-#   while (t<=final){
-#   for(t in seq(begin, final)){
-library(foreach)
-temps<-foreach(t=seq(begin, final), .combine="rbind") if(hpc=="none") %do% else %dopar%{
+
+
+temps<-foreach(t=seq(begin, final), .combine="rbind") %dopar%{   
+    #adjust regressors for different models
     dummy<-c(rep(0, t), rep(1, n-t))
     x1<-switch(modelName, "C"=cbind(1, dummy,x), "CT"=cbind(1, dummy, 1:n, x), "CS"=cbind(1, dummy, x, x*dummy))
-    #adjust regressors for different models
-    if (model==3){ 
-      x1<-cbind(rep(1,n), dummy, 1:n, x)}
-    else if (model==4){
-      x1<-cbind(rep(1,n), dummy, x, x*dummy)}
-    else if (model==2){
-      x1<-cbind(c(rep(1,n)), dummy,x)}
-    
-   #compute ADF for each t 
+   #compute ADF and PP for each t 
     adfTemp<-GHadf(y, x1, kmax=k,choice=choice)
-    temp1<-adfTemp$tstat
-    temp2<-adfTemp$lag
-#     temp1[t-begin+1]<-adfTemp$tstat
-#     temp2[t-begin+1]<-adfTemp$lag
-
-#compute Phillips Zt and Za for each t 
     tempPP<-GHphil(y,x1)
-    temp3<-tempPP$za
-    temp4<-tempPP$zt
-c(temp1, temp2, temp3, temp4)
-#     temp3[t-begin+1]<-tempPP$za
-#     temp4[t-begin+1]<-tempPP$zt
-
-#     t<-t+1
+    c(adfTemp$tstat, adfTemp$lag, tempPP$za, tempPP$zt)
 }
 
 # Min ADF test and breakpoint
@@ -149,17 +129,9 @@ c(70.18, 64.41, 59.40,54.38, 22.04), c(76.95, 70.56, 65.44, 60.12, 26.46),c(90.3
   selectCol<-switch(modelName, "C"=(m*3)-2, "CT"=(m*3)-1, "CS"=(m*3))
   crit.val1<-table1[selectCol,]
   crit.val2<-table2[selectCol,]
-#   if(model==2)crit.val1<-table1[(m*3)-2,]
-#   if(model==3)crit.val1<-table1[(m*3)-1,]
-#   if(model==4)crit.val1<-table1[(m*3),]
-
-#Selection of the appropriate critical value for Za
-#   if(model==2)crit.val2<-table2[(m*3)-2,]
-#   if(model==3)crit.val2<-table2[(m*3)-1,]
-#   if(model==4)crit.val2<-table2[(m*3),]
 
  
-#Output
+##Output
   res<-list(adf=minADF, critical.values1=crit.val1, critical.values2=crit.val2, breakpointADF=breakpointADF, ADFlag=lag, 
 Zt=minZt,breakpointZt=breakpointZt,Za=minZa,  breakpointZa=breakpointZa, model=modelName, vars=ncol(as.matrix(x)),
 AdfLagChoice=AdfLagChoice, TestValues=cbind(temp1=temps[,1], temp3=temps[,3], temp4=temps[,4]))
@@ -330,7 +302,39 @@ print(stTestCT)
 plot(stTestCT)
 
 system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6))
-system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6))
+
+
+if(FALSE){
+  library(doMC)
+  registerDoMC(1)
+  getDoParWorkers()
+  s1<-system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6))
+
+  registerDoMC(2)
+  s2<-system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6, hpc="foreach"))
+
+  registerDoMC(3)
+  s3<-system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6, hpc="foreach"))
+
+  registerDoMC(4)
+  s4<-system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6, hpc="foreach"))
+
+  registerDoMC(6)
+  s6<-system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6, hpc="foreach"))
+
+  registerDoMC(8)
+  s8<-system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6, hpc="foreach"))
+
+  registerDoMC(12)
+  s12<-system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6, hpc="foreach"))
+
+  library(zoo)
+  M<-rbind(s1, s2, s3, s4, s6, s8,s12)
+  M<-zoo(M, order.by=c(1,2,3,4,6,8,12))
+}
+
+
+
 # Mon46m <- read.table (file="~/Documents/Ordi/MatLab/commandes/Gregory Hansen/mon46m.txt", header=FALSE, sep='\t', quote='"\'', dec='.', col.names = "Mon46qm")[,1]
 # Mon46q<- read.table (file="~/Documents/Ordi/MatLab/commandes/Gregory Hansen/mon46q.txt", header=FALSE, sep='\t', quote='"\'', dec='.', col.names = "Mon46q")[,1]
 # Mon47q<- read.table (file="~/Documents/Ordi/MatLab/commandes/Gregory Hansen/mon47q.txt", header=FALSE, sep='\t', quote='"\'', dec='.', col.names = "Mon47q")[,1]
