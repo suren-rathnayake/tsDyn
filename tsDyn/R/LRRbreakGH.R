@@ -74,6 +74,7 @@ LRRbreak.test<-function(y,x,model=c("C","CT","CS"), AdfLagChoice=c("User", "AIC"
 ##############
 
 
+
 temps<-foreach(t=seq(begin, final), .combine="rbind") %dopar%{   
     #adjust regressors for different models
     dummy<-c(rep(0, t), rep(1, n-t))
@@ -273,7 +274,7 @@ plot.GregHan1996<-function(x,showTest=c("All", "ADF", "Zt","Za"),...)
 
 ####Test of the function with internal data
 
-
+if(FALSE){
 #load data
 if(!"MyresFin"%in%ls()) { load(file="~/Dropbox/Documents/stats/R/greg Han/MyresFin.rda")
   attach(MyresFin)
@@ -302,7 +303,7 @@ print(stTestCT)
 plot(stTestCT)
 
 system.time(LRRbreak.test(y, x, model="CS", AdfLagChoice="AIC", ADFlagmax=6))
-
+}
 
 if(FALSE){
   library(doMC)
